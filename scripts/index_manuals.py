@@ -70,7 +70,13 @@ def main():
             manual_record["pages"] = len(pdf.pages)
             for page_index, page in enumerate(pdf.pages, start=1):
                 try:
-                    text = extract_page_text(page)
+                    text = "\n\n".join(
+                        part for part in [
+                            extract_page_text(page),
+                            extract_table_text(page),
+                        ]
+                        if part.strip()
+                    )
                 except Exception as exc:
                     text = f"[Text extraction failed on this page: {exc}]"
                 text = clean_text(text)
@@ -152,6 +158,29 @@ def extract_page_text(page):
     if footer_words:
         sections.append(words_to_lines(footer_words))
     return "\n".join(section for section in sections if section.strip())
+
+
+def extract_table_text(page):
+    sections = []
+    try:
+        tables = page.extract_tables()
+    except Exception:
+        tables = []
+    for table_index, table in enumerate(tables, start=1):
+        rows = []
+        for row in table:
+            cells = [clean_cell(cell) for cell in row]
+            if any(cells):
+                rows.append(" | ".join(cells))
+        if rows:
+            sections.append(f"EXTRACTED TABLE {table_index}\n" + "\n".join(rows))
+    return "\n\n".join(sections)
+
+
+def clean_cell(value):
+    if value is None:
+        return ""
+    return re.sub(r"\s+", " ", str(value)).strip()
 
 
 def words_to_lines(words):

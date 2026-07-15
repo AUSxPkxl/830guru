@@ -139,10 +139,23 @@ function isAuthorized(req) {
   }
 }
 
-server.listen(PORT, () => {
-  console.log(`Komatsu 830E Guru running at http://localhost:${PORT}`);
-  console.log(process.env.OPENAI_API_KEY ? `AI mode using ${OPENAI_MODEL}` : "Demo mode: set OPENAI_API_KEY in .env for live AI answers");
-});
+function startServer() {
+  server.listen(PORT, () => {
+    console.log(`Komatsu 830E Guru running at http://localhost:${PORT}`);
+    console.log(process.env.OPENAI_API_KEY ? `AI mode using ${OPENAI_MODEL}` : "Demo mode: set OPENAI_API_KEY in .env for live AI answers");
+  });
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  answerInDemoMode,
+  searchIndex,
+  startServer,
+  synthesizeOfflineAnswer
+};
 
 function loadDotEnv(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -472,11 +485,21 @@ function searchIndex(query) {
 
 function forcedSourceRecords(records, query) {
   const lower = normalizeQuestion(query);
-  if (!/steering/.test(lower) || !/accumulator/.test(lower) || !/pressure|precharge|charge/.test(lower)) return [];
+  const forcedPages = new Set();
+  if (/steering/.test(lower) && /accumulator/.test(lower) && /pressure|precharge|charge/.test(lower)) {
+    [677, 693, 694].forEach((page) => forcedPages.add(page));
+  }
+  if (/\b(strut|suspension|hydrair|ride height|oiling height|charging height)\b/.test(lower)) {
+    [526, 530, 532, 536].forEach((page) => forcedPages.add(page));
+  }
+  if (/\b(capacity|capacities|oil amount|fluid amount|oil level|hydraulic oil|wheel motor oil|service capacities)\b/.test(lower)) {
+    [13, 1061, 1077].forEach((page) => forcedPages.add(page));
+  }
+  if (!forcedPages.size) return [];
   return records.filter((record) => {
     const file = record.manualFile || (record.source && record.source.file);
     const page = record.source && record.source.page;
-    return file === "ShopManual.pdf" && [677, 693, 694].includes(page);
+    return file === "ShopManual.pdf" && forcedPages.has(page);
   });
 }
 
@@ -486,6 +509,7 @@ function detectIntent(query) {
   if (/\b(fault|code|event|diagnostic|troubleshoot)\b/i.test(lower)) return "fault";
   if (/\b(torque|tighten|tightening|n\.?m|ft\.?\s?lb|foot pounds?)\b/i.test(lower)) return "torque";
   if (/\bpressure|psi|kpa|mpa|precharge|accumulator\b/i.test(lower) && /\bspec|pressure|precharge\b/i.test(lower)) return "pressure";
+  if (/\b(height|level|amount|capacity|capacities|quantity|liters|gallons|oil|fluid|dimension|dimensions|strut|suspension)\b/i.test(lower)) return "spec";
   if (/\b(procedure|remove|removal|install|installation|replace|adjust|bleed|charge|test|check)\b/i.test(lower)) return "procedure";
   if (/\b(pressure|psi|kpa|mpa|charge|precharge|accumulator)\b/i.test(lower)) return "pressure";
   return "manual";
@@ -518,6 +542,7 @@ function scoreIntent(intent, manualType, title, text, haystack) {
   if (intent === "torque" && manualType === "operation_maintenance") score += 8;
   if (intent === "torque" && /\btorque|tighten|tightening|n·m|n\.m|ft\s?lb/.test(haystack)) score += 28;
   if (intent === "pressure" && /\bkpa\b|\bpsi\b|pressure|precharge/.test(haystack)) score += 18;
+  if (intent === "spec" && /\bheight|capacity|capacities|oil|level|liters?|gallons?|dimension|hydrair|suspension|extracted table\b/.test(haystack)) score += 26;
   if (intent === "procedure" && /procedure|removal|installation|adjustment|bleed|charging/.test(title)) score += 30;
   if (intent === "procedure" && /(^|\s)1\.\s/.test(text)) score += 12;
   if (intent === "procedure" && (/^section\b|^index\b|description page no/.test(title) || /\.{8,}/.test(text))) score -= 34;
@@ -655,6 +680,7 @@ function synthesizeOfflineAnswer(message, matches, intent) {
   if (intent === "pressure") return synthesizePressureAnswer(message, matches);
   if (intent === "torque") return synthesizeTorqueAnswer(message, matches);
   if (intent === "procedure") return synthesizeProcedureAnswer(message, matches);
+  if (intent === "spec") return synthesizeSpecAnswer(message, matches);
   return "";
 }
 
@@ -663,6 +689,7 @@ function intentLabel(intent) {
     fault: "fault-code troubleshooting",
     torque: "torque lookup",
     pressure: "pressure-spec lookup",
+    spec: "spec lookup",
     procedure: "procedure lookup",
     parts: "parts lookup",
     manual: "manual search"
@@ -734,6 +761,212 @@ function extractPressureFindings(message, matches) {
       return true;
     })
     .sort((a, b) => b.score - a.score);
+}
+
+function synthesizeSpecAnswer(message, matches) {
+  const findings = extractSpecFindings(message, matches);
+  if (!findings.length) return "";
+  const lines = ["Specs found in the manuals:"];
+  for (const item of findings.slice(0, 8)) {
+    lines.push(`- ${item.text}`);
+    lines.push(`  Source: ${item.manual} page ${item.page}.`);
+  }
+  lines.push("");
+  lines.push("Check the cited page image for the original table layout before using the value.");
+  return lines.join("\n");
+}
+
+function extractSpecFindings(message, matches) {
+  const terms = queryWords(message);
+  const preciseFindings = [];
+  for (const record of matches) {
+    preciseFindings.push(...extractKnownSpecFindings(message, record));
+  }
+  const precise = dedupeSpecFindings(preciseFindings).sort((a, b) => b.score - a.score);
+  if (precise.length) return precise;
+
+  const findings = [];
+  for (const record of matches) {
+    const lines = String(record.text || record.summary || "")
+      .split(/\r?\n/)
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    for (let index = 0; index < lines.length; index += 1) {
+      const windowLines = [lines[index - 2], lines[index - 1], lines[index], lines[index + 1], lines[index + 2]].filter(Boolean);
+      const text = windowLines.join(" ");
+      const hay = text.toLowerCase();
+      const hasValue = /\d/.test(text) && /\b(mm|cm|in\.?|kpa|psi|liters?|l\b|gal|gallon|gallons|height|capacity|oil|hydraulic|coolant|fuel)\b/i.test(text);
+      const hits = terms.reduce((total, term) => total + (hay.includes(term) ? 1 : 0), 0);
+      if (!hasValue || hits < 2) continue;
+      findings.push({
+        text: text.slice(0, 560),
+        manual: record.source && record.source.manual,
+        page: record.source && record.source.page,
+        score: hits * 10 + (/table|height|capacity|oiling|charging|service capacities|extracted table/i.test(text) ? 10 : 0)
+      });
+    }
+  }
+  return dedupeSpecFindings(findings).sort((a, b) => b.score - a.score);
+}
+
+function extractKnownSpecFindings(message, record) {
+  const lower = normalizeQuestion(message).toLowerCase();
+  const text = String(record.text || record.summary || "");
+  const page = record.source && record.source.page;
+  const manual = record.source && record.source.manual;
+  const findings = [];
+  const wantsFront = /\bfront\b/.test(lower);
+  const wantsRear = /\brear\b/.test(lower);
+  const wantsSuspension = /\b(strut|struts|suspension|hydrair|ride height|oiling height|charging height)\b/.test(lower);
+  const wantsAmount = /\b(amount|capacity|capacities|quantity|liters?|gallons?|gal|oil|fluid)\b/.test(lower);
+  const wantsCapacity = /\b(amount|capacity|capacities|quantity|liters?|gallons?|gal)\b/.test(lower);
+  const wantsSuspensionDimension = /\b(height|dimension|dimensions|ride height|oiling height|charging height|charge|charging|pressure)\b/.test(lower) && wantsSuspension;
+  const wantsLevel = /\blevel\b/.test(lower);
+
+  if (wantsAmount) {
+    const oilMatch = text.match(/\b(front|rear)\s+suspension\s+holds\s+approximately\s+([\d.]+)\s*l\s*\(([\d.]+)\s*gal\)\s+of\s+oil/i);
+    if (oilMatch && (!wantsFront || oilMatch[1].toLowerCase() === "front") && (!wantsRear || oilMatch[1].toLowerCase() === "rear")) {
+      findings.push({
+        text: `${capitalize(oilMatch[1])} suspension oil amount: approximately ${oilMatch[2]} L (${oilMatch[3]} gal) of oil.`,
+        manual,
+        page,
+        score: 170 + (wantsAmount ? 40 : 0)
+      });
+    }
+  }
+
+  if (wantsSuspensionDimension) {
+    const tableMatch = text.match(/TABLE\s+([123]):\s+((?:FRONT|REAR)\s+SUSPENSION\s+DIMENSIONS[^\n]*)[\s\S]{0,240}?OILING HEIGHT\s*\|\s*CHARGING HEIGHT\s*\|\s*\*?CHARGING PRESSURE\s*\n([^\n]+)/i);
+    if (tableMatch) {
+      const tableNumber = tableMatch[1];
+      const title = cleanSpecText(tableMatch[2]).replace(/\s*\|\s*/g, " ").trim();
+      const columns = tableMatch[3].split("|").map((cell) => cleanSpecText(cell.replace(/^\s*\*\s*/, "")));
+      if (columns.length >= 3) {
+        const isFrontTable = /front/i.test(title);
+        const isRearTable = /rear/i.test(title);
+        if ((!wantsFront || isFrontTable) && (!wantsRear || isRearTable)) {
+          const rodNote = tableNumber === "2" ? " rod up" : tableNumber === "3" ? " rod down" : "";
+          findings.push({
+            text: `${title}${rodNote}: oiling height ${columns[0]}; charging height ${columns[1]}; charging pressure ${columns[2]} (reference only, may vary depending on body weights).`,
+            manual,
+            page,
+            score: 160 + (wantsFront && isFrontTable ? 35 : 0) + (wantsRear && isRearTable ? 35 : 0)
+          });
+        }
+      }
+    }
+  }
+
+  if (wantsCapacity || /\bservice capacities\b/.test(lower)) {
+    for (const row of extractCapacityRows(text)) {
+      const rowLower = row.label.toLowerCase();
+      if (!capacityRowMatchesQuery(lower, rowLower)) continue;
+      findings.push({
+        text: `${row.label}: ${row.liters} L (${row.gallons} U.S. gal).`,
+        manual,
+        page,
+        score: 150 + capacitySpecificityScore(lower, rowLower)
+      });
+    }
+
+    const tankServiceMatch = text.match(/HYDRAULIC TANK[\s\S]{0,260}?approximate capacity\s+(\d+)\s*l\s*\((\d+)\s*gal\)/i);
+    if (tankServiceMatch && /\bhydraulic\b|\btank\b/.test(lower)) {
+      findings.push({
+        text: `Hydraulic tank refill after draining: approximate capacity ${tankServiceMatch[1]} L (${tankServiceMatch[2]} gal).`,
+        manual,
+        page,
+        score: 185
+      });
+    }
+  }
+
+  if (wantsLevel && /\bhydraulic\b|\btank\b|\boil\b/.test(lower)) {
+    const levelMatch = text.match(/With the engine stopped,\s*key switch\s*OFF,\s*hydraulic system bled down and body down,\s*oil\s+should\s+be\s+visible\s+in\s+the\s+top\s+sight\s+gauge/i);
+    if (levelMatch) {
+      findings.push({
+        text: "Hydraulic tank oil level: with engine stopped, key switch OFF, hydraulic system bled down, and body down, oil should be visible in the top sight gauge.",
+        manual,
+        page,
+        score: 190
+      });
+    }
+  }
+
+  return findings;
+}
+
+function extractCapacityRows(text) {
+  const rows = [];
+  const tableRowPattern = /^([^|\n]*?(?:Crankcase|Cooling System|Hydraulic System|Hydraulic Tank|Wheel Motor|Fuel Tank|Retractable Ladder)[^|\n]*?)\s*\|\s*(\d+(?:\.\d+)?)\s*\|\s*(\d+(?:\.\d+)?)/gim;
+  let match;
+  while ((match = tableRowPattern.exec(text))) {
+    rows.push({
+      label: cleanCapacityLabel(match[1]),
+      liters: match[2],
+      gallons: match[3]
+    });
+  }
+
+  const plainRowPattern = /^(Hydraulic System|Hydraulic Tank|Wheel Motor Gear Box \(each\)|Fuel Tank)(?:\s*\.)+\s*(\d+(?:\.\d+)?)(?:\s*\.)*\s*\((\d+(?:\.\d+)?)\)/gim;
+  while ((match = plainRowPattern.exec(text))) {
+    rows.push({
+      label: cleanCapacityLabel(match[1]),
+      liters: match[2],
+      gallons: match[3]
+    });
+  }
+  return rows;
+}
+
+function capacityRowMatchesQuery(query, rowLabel) {
+  if (/\bwheel motor\b/.test(query)) return /\bwheel motor\b/.test(rowLabel);
+  if (/\bhydraulic\s+tank\b|\btank\b/.test(query)) return /\bhydraulic tank\b/.test(rowLabel);
+  if (/\bhydraulic\b/.test(query)) return /\bhydraulic system\b|\bhydraulic tank\b/.test(rowLabel);
+  if (/\bfuel\b/.test(query)) return /\bfuel\b/.test(rowLabel);
+  if (/\bcoolant|cooling\b/.test(query)) return /\bcooling\b/.test(rowLabel);
+  if (/\bcrankcase|engine oil\b/.test(query)) return /\bcrankcase\b/.test(rowLabel);
+  return false;
+}
+
+function capacitySpecificityScore(query, rowLabel) {
+  let score = 0;
+  if (/\bhydraulic tank\b/.test(query) && /\bhydraulic tank\b/.test(rowLabel)) score += 45;
+  if (/\bhydraulic\b/.test(query) && /\bhydraulic\b/.test(rowLabel)) score += 25;
+  if (/\bwheel motor\b/.test(query) && /\bwheel motor\b/.test(rowLabel)) score += 45;
+  return score;
+}
+
+function cleanCapacityLabel(value) {
+  return cleanSpecText(value)
+    .replace(/:\s*Refer to .*$/i, "")
+    .replace(/:\s*(\()/, " $1")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/:$/, "");
+}
+
+function cleanSpecText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .replace(/(\d)\s*psi\b/gi, "$1 psi")
+    .trim();
+}
+
+function capitalize(value) {
+  const text = String(value || "");
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+}
+
+function dedupeSpecFindings(findings) {
+  const seen = new Set();
+  return findings.filter((item) => {
+    const key = `${item.page}-${item.text.slice(0, 120).toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function synthesizeTorqueAnswer(message, matches) {
@@ -955,10 +1188,32 @@ function sentenceAround(text, index) {
 
 function queryWords(query) {
   const stop = new Set(["what", "whats", "is", "the", "a", "an", "for", "of", "to", "truck", "please", "tell", "me", "how", "do", "does", "on"]);
-  return normalizeQuestion(query)
+  const words = normalizeQuestion(query)
     .toLowerCase()
     .split(/[^a-z0-9-]+/)
     .filter((word) => word.length > 1 && !stop.has(word) && !/^\d{1,3}$/.test(word));
+  return expandQueryWords(words);
+}
+
+function expandQueryWords(words) {
+  const expansions = {
+    strut: ["suspension", "hydrair"],
+    struts: ["suspension", "hydrair"],
+    amount: ["capacity", "liters", "gallons"],
+    amounts: ["capacity", "liters", "gallons"],
+    quantity: ["capacity", "liters", "gallons"],
+    oil: ["lubrication", "service"],
+    level: ["sight", "gauge"],
+    levels: ["sight", "gauge"],
+    height: ["oiling", "charging", "dimension"],
+    heights: ["oiling", "charging", "dimension"]
+  };
+  const expanded = [];
+  for (const word of words) {
+    expanded.push(word);
+    for (const extra of expansions[word] || []) expanded.push(extra);
+  }
+  return [...new Set(expanded)];
 }
 
 function normalizeQuestion(query) {
