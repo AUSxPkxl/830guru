@@ -20,6 +20,7 @@ const elements = {
   sources: document.querySelector("#sources"),
   uploadForm: document.querySelector("#uploadForm"),
   docInput: document.querySelector("#docInput"),
+  reindexButton: document.querySelector("#reindexButton"),
   manualList: document.querySelector("#manualList"),
   noteForm: document.querySelector("#noteForm"),
   noteTitle: document.querySelector("#noteTitle"),
@@ -80,6 +81,10 @@ function bindEvents() {
   elements.uploadForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     await uploadDocuments();
+  });
+
+  elements.reindexButton.addEventListener("click", async () => {
+    await reindexManuals();
   });
 
   elements.noteForm.addEventListener("submit", async (event) => {
@@ -277,6 +282,23 @@ async function uploadDocuments() {
   }
   elements.docInput.value = "";
   await refreshStatus();
+}
+
+async function reindexManuals() {
+  elements.modePill.textContent = "Indexing manuals";
+  elements.reindexButton.disabled = true;
+  try {
+    const response = await fetch("/api/reindex", { method: "POST" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || result.error || "Indexing failed");
+    elements.modePill.textContent = `Indexed ${result.indexCount || 0} pages`;
+    await refreshStatus();
+  } catch (error) {
+    elements.modePill.textContent = "Indexing failed";
+    alert(`Indexing failed: ${error.message}`);
+  } finally {
+    elements.reindexButton.disabled = false;
+  }
 }
 
 async function refreshNotes() {

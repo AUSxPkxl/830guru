@@ -7,7 +7,13 @@ services:
     envVars:
       - key: OPENAI_MODEL
         value: gpt-5.2
+      - key: PYTHON_PATH
+        value: python3
       - key: OPENAI_API_KEY
         sync: false
       - key: APP_PASSWORD
         sync: false
+    disk:
+      name: guru-data
+      mountPath: /app/data
+      sizeGB: 5

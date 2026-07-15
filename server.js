@@ -16,6 +16,7 @@ loadDotEnv(path.join(ROOT, ".env"));
 
 const PORT = Number(process.env.PORT || 8300);
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.2";
+const PYTHON_PATH = process.env.PYTHON_PATH || findPythonPath();
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -68,6 +69,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/documents" && req.method === "POST") {
       const uploaded = await handleUpload(req);
       return json(res, 201, { uploaded, manuals: listManuals() });
+    }
+
+    if (url.pathname === "/api/reindex" && req.method === "POST") {
+      const result = await rebuildManualIndex();
+      return json(res, 200, result);
     }
 
     if (url.pathname === "/api/notes" && req.method === "GET") {
@@ -313,6 +319,18 @@ function listManuals() {
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function rebuildManualIndex() {
+  const scriptPath = path.join(ROOT, "scripts", "index_manuals.py");
+  if (!fs.existsSync(scriptPath)) throw new Error("Indexer script not found");
+  const output = await runProcessWithOutput(PYTHON_PATH, [scriptPath], ROOT, 10 * 60 * 1000);
+  return {
+    ok: true,
+    output,
+    indexCount: readJson(INDEX_PATH, []).length,
+    manifest: readJson(path.join(DATA_DIR, "index-manifest.json"), null)
+  };
 }
 
 async function handleChat(body) {
@@ -925,6 +943,43 @@ function getPdftoppmPath() {
     if (candidate === "pdftoppm" || fs.existsSync(candidate)) return candidate;
   }
   throw new Error("pdftoppm was not found. Install Poppler or set PDFTOPPM_PATH in .env.");
+}
+
+function findPythonPath() {
+  const candidates = [
+    "C:\\Users\\ohpkx\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+    "python3",
+    "python"
+  ];
+  for (const candidate of candidates) {
+    if (candidate.includes("\\") && !fs.existsSync(candidate)) continue;
+    return candidate;
+  }
+  return "python3";
+}
+
+function runProcessWithOutput(command, args, cwd, timeoutMs) {
+  const { spawn } = require("child_process");
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd, windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error("Command timed out"));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve([stdout.trim(), stderr.trim()].filter(Boolean).join("\n"));
+      else reject(new Error(stderr || stdout || `Command failed with code ${code}`));
+    });
+  });
 }
 
 function runProcess(command, args) {

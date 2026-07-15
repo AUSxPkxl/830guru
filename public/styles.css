@@ -463,6 +463,12 @@ textarea:focus {
   width: 100%;
 }
 
+.upload-box .secondary-btn {
+  background: #f0eee6;
+  border-color: #d6cebf;
+  color: #263033;
+}
+
 dialog {
   width: min(420px, calc(100vw - 28px));
   border: 0;

@@ -58,6 +58,21 @@ Recommended deployment shape:
 
 This repo includes a `Dockerfile` and `render.yaml` for hosting on Render or a similar Docker host. After deployment, upload the manuals to the server's `data/manuals` folder and run the indexer there, or use a private persistent disk/volume containing `data/manuals` and `data/index.json`.
 
+## Render Test Deployment
+
+1. Create a new Render Blueprint from this GitHub repository.
+2. Set environment variables:
+   - `OPENAI_API_KEY`
+   - `APP_PASSWORD`
+   - `OPENAI_MODEL=gpt-5.2`
+3. Keep the persistent disk enabled at `/app/data`.
+4. Open the deployed URL and log in using any username plus the `APP_PASSWORD` as the password.
+5. Upload the manuals in the Documents panel.
+6. Click `Reindex manuals`.
+7. Ask a known question such as `what is steering accumulator pressure`.
+
+Do not use the hosted app without `APP_PASSWORD`; otherwise anyone with the URL can use your OpenAI API key.
+
 ## Add manuals
 
 Use the app's Documents panel to add PDFs, or place files directly in:
