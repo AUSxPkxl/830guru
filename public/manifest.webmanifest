@@ -1,0 +1,9 @@
+{
+  "name": "Komatsu 830E Guru",
+  "short_name": "830E Guru",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f2ea",
+  "theme_color": "#c9952f",
+  "icons": []
+}

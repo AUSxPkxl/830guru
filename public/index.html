@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#c9952f">
+    <title>Komatsu 830E-1AC Guru</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Previous questions and machine context">
+        <div class="brand-block">
+          <div class="brand-mark">830</div>
+          <div>
+            <h1>830E-1AC Guru</h1>
+            <p>Source-only service assistant</p>
+          </div>
+        </div>
+
+        <section class="unit-card">
+          <label for="unitNumber">Truck number</label>
+          <div class="unit-row">
+            <input id="unitNumber" autocomplete="off" placeholder="e.g. DT143">
+            <button id="saveUnit" type="button">Set</button>
+          </div>
+        </section>
+
+        <section class="quick-panel">
+          <div class="panel-title">Ask fast</div>
+          <button class="quick-btn" data-prompt="Look up fault code ">Fault code</button>
+          <button class="quick-btn" data-prompt="Find the torque spec for ">Torque spec</button>
+          <button class="quick-btn" data-prompt="Give me the procedure for ">Procedure</button>
+          <button class="quick-btn" data-prompt="Find the pressure spec and test procedure for ">Pressure</button>
+        </section>
+
+        <section class="history-panel">
+          <div class="panel-row">
+            <div class="panel-title">Previous questions</div>
+            <button id="clearHistory" class="ghost-btn" type="button">Clear</button>
+          </div>
+          <div id="historyList" class="history-list"></div>
+        </section>
+      </aside>
+
+      <main class="chat-area">
+        <header class="topbar">
+          <div>
+            <div class="eyebrow">Komatsu 830E-1AC</div>
+            <h2>Ask for specs, procedures, pressures, and fault-code help.</h2>
+          </div>
+          <div class="status-pill" id="modePill">Starting</div>
+        </header>
+
+        <div id="messages" class="messages" aria-live="polite"></div>
+
+        <form id="chatForm" class="composer">
+          <textarea id="messageInput" rows="2" placeholder="Ask from the provided manuals only..."></textarea>
+          <div class="composer-actions">
+            <button id="copyLast" class="secondary-btn" type="button">Copy last</button>
+            <button id="printLast" class="secondary-btn" type="button">Print</button>
+            <button class="send-btn" type="submit">Ask</button>
+          </div>
+        </form>
+      </main>
+
+      <aside class="source-pane" aria-label="Sources, documents, and notes">
+        <section class="source-section">
+          <div class="panel-row">
+            <div>
+              <div class="panel-title">Source pages</div>
+              <p class="microcopy">Every answer should show page evidence once indexed.</p>
+            </div>
+          </div>
+          <div id="sources" class="source-grid"></div>
+        </section>
+
+        <section class="source-section">
+          <div class="panel-title">Documents</div>
+          <form id="uploadForm" class="upload-box">
+            <input id="docInput" type="file" accept="application/pdf" multiple>
+            <button type="submit">Add PDFs</button>
+          </form>
+          <div id="manualList" class="manual-list"></div>
+        </section>
+
+        <section class="source-section">
+          <div class="panel-title">Unit notes</div>
+          <form id="noteForm" class="note-form">
+            <input id="noteTitle" placeholder="Short title">
+            <textarea id="noteBody" rows="3" placeholder="Symptom, reading, repair note..."></textarea>
+            <input id="notePhoto" type="file" accept="image/*">
+            <button type="submit">Save note</button>
+          </form>
+          <div id="notesList" class="notes-list"></div>
+        </section>
+      </aside>
+    </div>
+
+    <dialog id="unitDialog">
+      <form method="dialog" class="dialog-card">
+        <div class="brand-mark">830</div>
+        <h2>Which truck are we working on?</h2>
+        <p>I'll attach questions and notes to this unit number. You can change it anytime.</p>
+        <input id="dialogUnit" placeholder="Truck number">
+        <button id="dialogSave" value="default">Start</button>
+      </form>
+    </dialog>
+
+    <template id="emptySourceTemplate">
+      <article class="source-card empty-source">
+        <div class="page-thumb">
+          <div class="page-lines"></div>
+          <span>PAGE PENDING</span>
+        </div>
+        <div>
+          <h3>No cited page yet</h3>
+          <p>Add and index your 830E-1AC manuals to unlock page thumbnails.</p>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

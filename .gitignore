@@ -1,0 +1,15 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+data/*.db
+data/*.sqlite
+data/uploads/
+data/manuals/
+data/page-images/
+data/photos/
+data/index.json
+data/index-manifest.json
+data/notes.json
+*.pdf
+*.log

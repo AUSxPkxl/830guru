@@ -1,0 +1,19 @@
+{
+  "description": "Future retrieval records generated from provided 830E-1AC PDFs only.",
+  "record": {
+    "id": "stable-record-id",
+    "title": "Short source title",
+    "truckVariant": "830E-1AC",
+    "system": "Fault codes, torque specs, procedures, or pressures",
+    "type": "fault_code | torque | procedure | pressure | parts | schematic",
+    "summary": "Short extracted summary from the source page.",
+    "text": "Full extracted page text used for local source search.",
+    "source": {
+      "manual": "PDF file name",
+      "page": 123,
+      "pageImage": "/page-images/manual-page-0123.png",
+      "quote": "Short extracted source quote."
+    },
+    "keywords": ["search", "terms"]
+  }
+}

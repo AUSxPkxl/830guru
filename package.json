@@ -1,0 +1,16 @@
+{
+  "name": "komatsu-830e-guru",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first Komatsu 830E assistant prototype with chat, document library, and source-page previews.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "index": "python scripts/index_manuals.py",
+    "check": "node --check server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
