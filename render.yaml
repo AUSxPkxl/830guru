@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: komatsu-830e-guru
+    env: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: OPENAI_MODEL
+        value: gpt-5.2
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false

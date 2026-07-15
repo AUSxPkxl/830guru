@@ -34,6 +34,15 @@ ensureStorage();
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (!isAuthorized(req)) {
+      res.writeHead(401, {
+        "WWW-Authenticate": 'Basic realm="830E Guru"',
+        "Content-Type": "text/plain; charset=utf-8"
+      });
+      res.end("Authentication required");
+      return;
+    }
+
     const url = new URL(req.url, `http://${req.headers.host}`);
 
     if (url.pathname === "/api/status" && req.method === "GET") {
@@ -105,6 +114,21 @@ const server = http.createServer(async (req, res) => {
     return json(res, 500, { error: "Server error", detail: error.message });
   }
 });
+
+function isAuthorized(req) {
+  const password = process.env.APP_PASSWORD;
+  if (!password) return true;
+  const header = req.headers.authorization || "";
+  if (!header.startsWith("Basic ")) return false;
+  try {
+    const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
+    const separator = decoded.indexOf(":");
+    const supplied = separator === -1 ? decoded : decoded.slice(separator + 1);
+    return crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(password));
+  } catch {
+    return false;
+  }
+}
 
 server.listen(PORT, () => {
   console.log(`Komatsu 830E Guru running at http://localhost:${PORT}`);

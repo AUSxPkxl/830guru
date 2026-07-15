@@ -35,9 +35,12 @@ Copy `.env.example` to `.env` and add your API key:
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-5.2
 PORT=8300
+APP_PASSWORD=
 ```
 
 Restart the server after changing `.env`.
+
+Set `APP_PASSWORD` before exposing the app on the internet. The app uses browser Basic Auth when that variable is present.
 
 ## Hosting Notes
 
@@ -49,8 +52,11 @@ Recommended deployment shape:
 
 1. Private GitHub repository for source code.
 2. Cloud/server environment variable `OPENAI_API_KEY`.
-3. Private storage for manuals and generated index data.
-4. Login/password or VPN before exposing it outside your PC.
+3. Cloud/server environment variable `APP_PASSWORD`.
+4. Private storage for manuals and generated index data.
+5. Login/password or VPN before exposing it outside your PC.
+
+This repo includes a `Dockerfile` and `render.yaml` for hosting on Render or a similar Docker host. After deployment, upload the manuals to the server's `data/manuals` folder and run the indexer there, or use a private persistent disk/volume containing `data/manuals` and `data/index.json`.
 
 ## Add manuals
 
