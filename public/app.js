@@ -110,10 +110,12 @@ async function refreshStatus() {
   const response = await fetch("/api/status");
   state.status = await response.json();
   const manualCount = state.status.manuals.length;
+  const indexCount = state.status.indexCount || 0;
+  const indexLabel = `${manualCount} PDFs, ${indexCount} pages`;
   elements.modePill.textContent = state.status.mode === "ai"
-    ? `AI ready, ${manualCount} PDFs`
-    : `Source-only demo, ${manualCount} PDFs`;
-  elements.modePill.classList.toggle("demo", state.status.mode !== "ai");
+    ? `AI ready, ${indexLabel}`
+    : `Source-only demo, ${indexLabel}`;
+  elements.modePill.classList.toggle("demo", state.status.mode !== "ai" || indexCount === 0);
   renderManuals(state.status.manuals);
 }
 

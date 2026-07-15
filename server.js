@@ -48,12 +48,14 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
 
     if (url.pathname === "/api/status" && req.method === "GET") {
+      const indexCount = readJson(INDEX_PATH, []).length;
       return json(res, 200, {
         ok: true,
         mode: process.env.OPENAI_API_KEY ? "ai" : "demo",
         model: OPENAI_MODEL,
         manuals: listManuals(),
-        indexCount: readJson(INDEX_PATH, []).length
+        indexCount,
+        seedIndexCount: getSeedIndexCount()
       });
     }
 
@@ -169,6 +171,8 @@ function ensureStorage() {
 function seedBundledData() {
   if (!fs.existsSync(SEED_DATA_DIR)) return;
   copyMissing(SEED_DATA_DIR, DATA_DIR);
+  restoreSeedIndexIfBetter("index.json");
+  restoreSeedIndexIfBetter("index-manifest.json");
 }
 
 function copyMissing(source, target) {
@@ -185,6 +189,29 @@ function copyMissing(source, target) {
   if (!fs.existsSync(target)) {
     fs.copyFileSync(source, target);
   }
+}
+
+function restoreSeedIndexIfBetter(fileName) {
+  const source = path.join(SEED_DATA_DIR, fileName);
+  const target = path.join(DATA_DIR, fileName);
+  if (!fs.existsSync(source)) return;
+  if (!fs.existsSync(target)) {
+    fs.copyFileSync(source, target);
+    return;
+  }
+  if (fileName === "index.json") {
+    const sourceCount = readJson(source, []).length;
+    const targetCount = readJson(target, []).length;
+    if (sourceCount > targetCount) fs.copyFileSync(source, target);
+    return;
+  }
+  const sourceStat = fs.statSync(source);
+  const targetStat = fs.statSync(target);
+  if (sourceStat.size > targetStat.size) fs.copyFileSync(source, target);
+}
+
+function getSeedIndexCount() {
+  return readJson(path.join(SEED_DATA_DIR, "index.json"), []).length;
 }
 
 function serveStatic(req, res, pathname) {
@@ -362,8 +389,34 @@ async function handleChat(body) {
   if (!message) return { answer: "Ask me about a fault code, torque spec, pressure, or procedure.", sources: [] };
 
   const matches = searchIndex(message);
+  const indexCount = readJson(INDEX_PATH, []).length;
+  if (!matches.length && indexCount === 0 && listManuals().length > 0) {
+    return {
+      answer: [
+        "The PDFs are present, but the manuals are not indexed yet, so I cannot cite source pages.",
+        "",
+        "Click Reindex manuals in the Documents panel, wait for the page count to update, then ask again.",
+        "",
+        "If this is the hosted Render app, redeploy the latest commit first so the bundled seed index can restore automatically."
+      ].join("\n"),
+      sources: []
+    };
+  }
   if (process.env.OPENAI_API_KEY) {
-    return answerWithOpenAI(message, history, matches);
+    try {
+      return await answerWithOpenAI(message, history, matches);
+    } catch (error) {
+      const fallback = answerInDemoMode(message, matches);
+      return {
+        answer: [
+          "AI call failed, so I am falling back to local source-only mode.",
+          `Reason: ${error.message}`,
+          "",
+          fallback.answer
+        ].join("\n"),
+        sources: fallback.sources
+      };
+    }
   }
   return answerInDemoMode(message, matches);
 }
