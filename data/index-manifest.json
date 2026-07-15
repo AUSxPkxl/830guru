@@ -1,0 +1,38 @@
+{
+  "createdAt": "2026-07-15T15:50:53.535516+00:00",
+  "manuals": [
+    {
+      "file": "OperationMaintanence.pdf",
+      "displayName": "830E-1AC Operation & Maintenance Manual",
+      "manualType": "operation_maintenance",
+      "pages": 31,
+      "textPages": 30,
+      "size": 552256
+    },
+    {
+      "file": "PartsBook.pdf",
+      "displayName": "830E-1AC Parts Book",
+      "manualType": "parts_book",
+      "pages": 606,
+      "textPages": 605,
+      "size": 71367056
+    },
+    {
+      "file": "QSK60PartsBook.pdf",
+      "displayName": "Cummins QSK60 Parts Book",
+      "manualType": "engine_parts_book",
+      "pages": 176,
+      "textPages": 176,
+      "size": 1790500
+    },
+    {
+      "file": "ShopManual.pdf",
+      "displayName": "830E-1AC Shop Manual",
+      "manualType": "shop_manual",
+      "pages": 1143,
+      "textPages": 1142,
+      "size": 30123156
+    }
+  ],
+  "recordCount": 1956
+}

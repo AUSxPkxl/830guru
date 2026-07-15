@@ -5,11 +5,12 @@ __pycache__/
 data/*.db
 data/*.sqlite
 data/uploads/
-data/manuals/
+data/manuals/*
+!data/manuals/
+!data/manuals/*.pdf
 data/page-images/
 data/photos/
-data/index.json
-data/index-manifest.json
 data/notes.json
 *.pdf
+!data/manuals/*.pdf
 *.log
