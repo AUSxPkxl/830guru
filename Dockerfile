@@ -12,7 +12,7 @@ COPY package.json ./
 COPY server.js ./
 COPY public ./public
 COPY scripts ./scripts
-COPY data/index.schema.json ./data/index.schema.json
+COPY data ./seed-data
 COPY .env.example ./.env.example
 
 RUN mkdir -p data/manuals data/page-images data/photos

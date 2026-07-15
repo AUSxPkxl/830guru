@@ -6,7 +6,7 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: OPENAI_MODEL
-        value: gpt-5.2
+        value: gpt-5.6-sol
       - key: PYTHON_PATH
         value: python3
       - key: OPENAI_API_KEY

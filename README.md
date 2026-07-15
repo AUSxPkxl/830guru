@@ -33,7 +33,7 @@ Copy `.env.example` to `.env` and add your API key:
 
 ```text
 OPENAI_API_KEY=your_key_here
-OPENAI_MODEL=gpt-5.2
+OPENAI_MODEL=gpt-5.6-sol
 PORT=8300
 APP_PASSWORD=
 ```
@@ -44,9 +44,9 @@ Set `APP_PASSWORD` before exposing the app on the internet. The app uses browser
 
 ## Hosting Notes
 
-Do not publish `.env`, PDFs, extracted `data/index.json`, page thumbnails, photos, or notes to a public repository. The app intentionally ignores those files for GitHub.
+Do not publish `.env`, page thumbnails, photos, or notes to a public repository. Manuals and extracted index data are private materials; only bundle them into GitHub/Render after explicitly confirming the repo and deployment are private.
 
-GitHub is good for storing the app source, but GitHub Pages cannot run this Node server securely because the OpenAI API key must stay server-side. To use the app anywhere, deploy the Node app to a private host such as Render, Railway, Fly.io, a VPS, or a private company server, then upload/index the manuals on that host.
+GitHub is good for storing the app source, but GitHub Pages cannot run this Node server securely because the OpenAI API key must stay server-side. To use the app anywhere, deploy the Node app to a private host such as Render, Railway, Fly.io, a VPS, or a private company server.
 
 Recommended deployment shape:
 
@@ -56,7 +56,7 @@ Recommended deployment shape:
 4. Private storage for manuals and generated index data.
 5. Login/password or VPN before exposing it outside your PC.
 
-This repo includes a `Dockerfile` and `render.yaml` for hosting on Render or a similar Docker host. After deployment, upload the manuals to the server's `data/manuals` folder and run the indexer there, or use a private persistent disk/volume containing `data/manuals` and `data/index.json`.
+This repo includes a `Dockerfile` and `render.yaml` for hosting on Render or a similar Docker host. The app can seed `/app/data` from bundled private data if manuals/index are intentionally added to the private repo later.
 
 ## Render Test Deployment
 
@@ -64,12 +64,11 @@ This repo includes a `Dockerfile` and `render.yaml` for hosting on Render or a s
 2. Set environment variables:
    - `OPENAI_API_KEY`
    - `APP_PASSWORD`
-   - `OPENAI_MODEL=gpt-5.2`
+   - `OPENAI_MODEL=gpt-5.6-sol`
 3. Keep the persistent disk enabled at `/app/data`.
 4. Open the deployed URL and log in using any username plus the `APP_PASSWORD` as the password.
-5. Upload the manuals in the Documents panel.
-6. Click `Reindex manuals`.
-7. Ask a known question such as `what is steering accumulator pressure`.
+5. Ask a known question such as `what is steering accumulator pressure`.
+6. If the app ever shows `0` indexed pages, click `Reindex manuals`.
 
 Do not use the hosted app without `APP_PASSWORD`; otherwise anyone with the URL can use your OpenAI API key.
 

@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = path.join(ROOT, "data");
+const SEED_DATA_DIR = path.join(ROOT, "seed-data");
 const MANUALS_DIR = path.join(DATA_DIR, "manuals");
 const PHOTOS_DIR = path.join(DATA_DIR, "photos");
 const PAGE_IMAGES_DIR = path.join(DATA_DIR, "page-images");
@@ -15,7 +16,7 @@ const NOTES_PATH = path.join(DATA_DIR, "notes.json");
 loadDotEnv(path.join(ROOT, ".env"));
 
 const PORT = Number(process.env.PORT || 8300);
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.2";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-sol";
 const PYTHON_PATH = process.env.PYTHON_PATH || findPythonPath();
 
 const MIME_TYPES = {
@@ -160,8 +161,30 @@ function ensureStorage() {
   fs.mkdirSync(MANUALS_DIR, { recursive: true });
   fs.mkdirSync(PHOTOS_DIR, { recursive: true });
   fs.mkdirSync(PAGE_IMAGES_DIR, { recursive: true });
+  seedBundledData();
   if (!fs.existsSync(INDEX_PATH)) fs.writeFileSync(INDEX_PATH, "[]\n");
   if (!fs.existsSync(NOTES_PATH)) fs.writeFileSync(NOTES_PATH, "[]\n");
+}
+
+function seedBundledData() {
+  if (!fs.existsSync(SEED_DATA_DIR)) return;
+  copyMissing(SEED_DATA_DIR, DATA_DIR);
+}
+
+function copyMissing(source, target) {
+  if (!fs.existsSync(source)) return;
+  const stat = fs.statSync(source);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(target, { recursive: true });
+    for (const entry of fs.readdirSync(source)) {
+      if (entry === "page-images" || entry === "photos") continue;
+      copyMissing(path.join(source, entry), path.join(target, entry));
+    }
+    return;
+  }
+  if (!fs.existsSync(target)) {
+    fs.copyFileSync(source, target);
+  }
 }
 
 function serveStatic(req, res, pathname) {
