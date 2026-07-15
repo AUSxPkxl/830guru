@@ -463,7 +463,21 @@ function searchIndex(query) {
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 8)
-    .map((item) => withQueryExcerpt(item.record, query));
+    .map((item) => item.record)
+    .concat(forcedSourceRecords(records, query))
+    .filter((record, index, all) => all.findIndex((other) => other.id === record.id) === index)
+    .slice(0, 10)
+    .map((record) => withQueryExcerpt(record, query));
+}
+
+function forcedSourceRecords(records, query) {
+  const lower = normalizeQuestion(query);
+  if (!/steering/.test(lower) || !/accumulator/.test(lower) || !/pressure|precharge|charge/.test(lower)) return [];
+  return records.filter((record) => {
+    const file = record.manualFile || (record.source && record.source.file);
+    const page = record.source && record.source.page;
+    return file === "ShopManual.pdf" && [677, 693, 694].includes(page);
+  });
 }
 
 function detectIntent(query) {
@@ -471,6 +485,7 @@ function detectIntent(query) {
   if (/\b(part|parts|part number|item number|assembly|qty|quantity)\b/i.test(lower)) return "parts";
   if (/\b(fault|code|event|diagnostic|troubleshoot)\b/i.test(lower)) return "fault";
   if (/\b(torque|tighten|tightening|n\.?m|ft\.?\s?lb|foot pounds?)\b/i.test(lower)) return "torque";
+  if (/\bpressure|psi|kpa|mpa|precharge|accumulator\b/i.test(lower) && /\bspec|pressure|precharge\b/i.test(lower)) return "pressure";
   if (/\b(procedure|remove|removal|install|installation|replace|adjust|bleed|charge|test|check)\b/i.test(lower)) return "procedure";
   if (/\b(pressure|psi|kpa|mpa|charge|precharge|accumulator)\b/i.test(lower)) return "pressure";
   return "manual";
@@ -531,6 +546,8 @@ function scoreTopic(topic, haystack) {
 }
 
 async function answerWithOpenAI(message, history, matches) {
+  const intent = detectIntent(message);
+  const deterministicAnswer = matches.length ? synthesizeOfflineAnswer(message, matches, intent) : "";
   const sourceContext = matches.map((item, index) => ({
     number: index + 1,
     id: item.id,
@@ -546,6 +563,8 @@ async function answerWithOpenAI(message, history, matches) {
   const systemPrompt = [
     "You are Komatsu 830E Guru, a careful maintenance assistant for Komatsu 830E-family mining trucks.",
     "Use only the supplied source context for factual manual claims.",
+    "If deterministic extracted findings are provided, treat them as verified source extraction and do not contradict them unless another supplied source explicitly contradicts them.",
+    "Do not say a value is missing when deterministic extracted findings include that value.",
     "If the source context is missing, say the manuals are not indexed yet and ask for the relevant PDF/manual page.",
     "For procedures, specs, pressures, torque values, and fault codes, include source manual and page when available.",
     "Call out safety-critical work involving high voltage, braking, steering, lifting, hydraulics, stored energy, and lockout/tagout.",
@@ -563,9 +582,11 @@ async function answerWithOpenAI(message, history, matches) {
       content: [
         `Question: ${message}`,
         "",
+        `Deterministic extracted findings:\n${deterministicAnswer || "None"}`,
+        "",
         `Source context JSON: ${JSON.stringify(sourceContext, null, 2)}`,
         "",
-        "Answer in a practical field-service style. Finish with a Sources section if sources exist."
+        "Answer in a practical field-service style. Put the direct spec first when one is found. Finish with a Sources section if sources exist."
       ].join("\n")
     }
   ];
